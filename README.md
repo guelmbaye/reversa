@@ -1,307 +1,365 @@
-# REVERSA — Gate 0 Blind World Spike
+# REVERSA
 
-This repository validates the core Winning Moment thesis before building the full product.
+## Self-healing commerce for AI agents
 
-## Goal
+> A payment timeout does not tell you what happened.  
+> **REVERSA checks external reality before money moves again.**
 
-Starting from the same visible symptom:
+**Live demo:** https://reversa-orpin.vercel.app/  
+**Source:** https://github.com/guelmbaye/reversa
 
-```text
-PAYMENT TIMED OUT
-ORDER NOT CONFIRMED
-```
+REVERSA is a recovery layer for agentic commerce. When an AI checkout times out or loses certainty after a payment call, blindly retrying can create a duplicate charge, while blindly stopping can lose a valid purchase.
 
-REVERSA must discover the hidden transaction reality and reach the independently verified safe outcome:
+REVERSA does neither.
 
-- W1 → RESTORE_ORDER
-- W2 → CAPTURE
-- W3 → VOID
-- W4 → REFUND
-- W5 → DO_NOTHING
-- W6 → ABSTAIN
+It inspects the real payment state, checks the business state required to complete the purchase safely, selects the correct recovery transition under deterministic policy, executes the allowed PayPal action, and independently verifies the final financial outcome.
 
-The agent must **not** receive the world/scenario ID, expected action, hidden truth, or test seed.
+---
 
-## Run
+## The problem
 
-```bash
-python -m app.cli arena
-python -m app.cli blind-run --world W3
-python -m app.cli baseline
-pytest -q
-```
+A network timeout is not a payment state.
 
-`--world` is only a harness/developer selector. The selected world ID is never passed into the agent context.
-
-## Gate 0 current scope
-
-This version uses a deterministic PayPal simulator to validate:
-
-1. hidden-world isolation,
-2. adaptive observations,
-3. counterfactual decisions,
-4. safety rules,
-5. independent verification,
-6. replay/idempotence,
-7. no-leak guarantees.
-
-The next step is replacing `PayPalSimulator` with a real PayPal Sandbox adapter while keeping the same tool contract.
-
-
-## PayPal Sandbox adapter (v0.2)
-
-The repository now includes a real REST adapter using the current PayPal REST endpoints.
-
-Install:
-
-```bash
-pip install -e ".[dev]"
-```
-
-Set credentials (never commit them):
-
-```bash
-export PAYPAL_CLIENT_ID="..."
-export PAYPAL_CLIENT_SECRET="..."
-export PAYPAL_BASE_URL="https://api-m.sandbox.paypal.com"
-```
-
-Create an `AUTHORIZE` order:
-
-```bash
-python -m app.paypal_cli create-order --amount 249.00 --currency USD
-```
-
-Open the returned `approve_url` using a Sandbox buyer account and approve the purchase. Then:
-
-```bash
-python -m app.paypal_cli authorize --order-id <ORDER_ID>
-python -m app.paypal_cli snapshot --order-id <ORDER_ID>
-```
-
-For a live W2/W3 starting point, stop after authorization.
-
-For a live W1/W4/W5 starting point, capture the authorization:
-
-```bash
-python -m app.paypal_cli capture --authorization-id <AUTHORIZATION_ID>
-python -m app.paypal_cli snapshot --order-id <ORDER_ID>
-```
-
-The live Gate 0 adapter intentionally re-reads `GET /v2/checkout/orders/{id}` after a lost/ignored response. This is the external truth source for the payment side of the blind world.
-
-### Lost-response injection
-
-For the W1 proof, do **not** fake PayPal success. Call the real capture endpoint, intentionally discard/withhold the successful HTTP response from the local checkout state, and then let REVERSA re-inspect the order. The local UI remains `UNKNOWN`; PayPal independently says the capture is complete.
-
-### Security
-
-- Never put `PAYPAL_CLIENT_SECRET` in the browser or repository.
-- Never expose hidden world metadata to the reasoner.
-- Use `PayPal-Request-Id` on mutating calls.
-- The payer approval step is real and remains outside the recovery agent.
-
-
-## Adaptive Reasoner (v0.3)
-
-Gate 0.3 adds a real active-observation orchestration loop.
-
-The provider is allowed to do only two things:
-
-1. request one probe from the fixed allow-list;
-2. propose one final action.
-
-The provider can never execute PayPal or merchant mutations. The deterministic Safety Gate remains authoritative.
-
-Run the reference adaptive provider:
-
-```bash
-python -m app.adaptive_cli --provider replay arena
-```
-
-This provider is deliberately deterministic and exists to validate the orchestrator contract.
-
-### Live LLM evaluation
-
-Install the optional OpenAI provider:
-
-```bash
-pip install -e ".[openai,dev]"
-```
-
-Set:
-
-```bash
-export OPENAI_API_KEY="..."
-export REVERSA_MODEL="<model available in your API account>"
-```
-
-Then:
-
-```bash
-python -m app.adaptive_cli --provider openai blind-run --world W3
-python -m app.adaptive_cli --provider openai arena
-```
-
-The provider uses the Responses API as a stateless next-step reasoner. REVERSA itself owns the tool loop, probe budget, observation history, no-leak boundary, safety gate, and independent verifier.
-
-The live LLM Gate passes only if all six hidden worlds independently verify with:
-
-- 0 unsafe actions
-- 0 duplicate financial effects
-- no hidden-world leakage
-- <= 3 probes per run
-- correct counterfactual divergence
-
-Do not treat the deterministic `replay` result as evidence that the AI thesis has passed. It validates the environment and orchestration only.
-
-
-## World Pushback instrumentation (v0.4)
-
-A hypothesis change is no longer automatically counted as evidence of causal adaptation.
-
-Each reasoning step now emits one of:
-
-- `INITIAL`
-- `SUPPORTED`
-- `REVISED`
-- `REJECTED`
-
-A `REJECTED` event is accepted only when it cites an observation already returned by the external world.
-
-Example:
+After a checkout timeout, an agent may see only:
 
 ```text
-INITIAL:
-"the payment may already have been captured"
-
-obs_01:
-PayPal => AUTHORIZATION ACTIVE, CAPTURE NONE
-
-REJECTED:
-"the payment was authorized but never captured"
-because obs_01 contradicted the capture hypothesis
+PAYMENT TIMEOUT
+PAYMENT UNKNOWN
+MERCHANT ORDER NOT CONFIRMED
 ```
 
-This is the measurable `THE WORLD PUSHED BACK` event.
+But the real world may be different:
 
-For live model evaluation, use repeated blind runs:
+- the authorization exists and inventory is still available;
+- the authorization exists but inventory is now unavailable;
+- a capture may already have happened;
+- the merchant order may be missing even though the payment succeeded.
 
-```bash
-python -m app.adaptive_cli --provider openai --repeats 5 arena
-```
+A retry rule cannot resolve those worlds safely.
 
-The live AI thesis should not be considered passed unless:
-- independent outcome pass rate is 100% on the core six worlds,
-- unsafe actions = 0,
-- duplicate effects = 0,
-- no-leak = true,
-- at least one genuine `REJECTED` hypothesis event is observed,
-- counterfactual worlds continue to produce different correct actions.
+---
 
+## The Winning Moment
 
-## Gate 0.5 — Live Blind Counterfactual A→B→A
+REVERSA was tested against three blind PayPal Sandbox worlds with the **same visible failure** and the **same initial PayPal payment state**.
 
-Winning Moment Rule v2 requires a real external outcome, not only the simulator.
+Only the hidden business reality changed.
 
-Gate 0.5 creates three distinct PayPal Sandbox `AUTHORIZE` orders and tests:
+| Blind world | Visible symptom | PayPal state | Hidden inventory | REVERSA action | Independent outcome |
+|---|---|---|---|---|---|
+| A1 | PAYMENT TIMEOUT | fresh authorization | available | **CAPTURE** | **PASS — capture COMPLETED** |
+| B | PAYMENT TIMEOUT | fresh authorization | unavailable | **VOID** | **PASS — authorization VOIDED** |
+| A2 | PAYMENT TIMEOUT | fresh authorization | available | **CAPTURE** | **PASS — capture COMPLETED** |
+
+### Result
 
 ```text
-same visible timeout
-same real PayPal starting state (fresh authorization)
-different hidden merchant reality
-
-A1 inventory available   -> CAPTURE
-B  inventory unavailable -> VOID
-A2 inventory available   -> CAPTURE
+CAPTURE → VOID → CAPTURE
 ```
 
-The model never receives A1/B/A2, expected_action, or the hidden harness secret.
+with:
 
-After execution, REVERSA re-reads PayPal using Payments v2:
-- `GET /v2/payments/authorizations/{authorization_id}`
-- `GET /v2/payments/captures/{capture_id}` when captured
-
-See `GATE_0_5_RUNBOOK.md`.
-
-Quick path:
-
-```bash
-python -m app.live_aba prepare
-# approve all three PayPal Sandbox URLs
-python -m app.live_aba arm
-python -m app.live_aba status
-python -m app.live_aba run --provider openai
+```text
+aba_flip_pass                   true
+all_independent_outcomes_pass   true
+counterfactual_probe_paths_pass true
+unsafe_executions               0
+duplicate_financial_effects     0
+no_leak                         true
+result                          PASS
 ```
 
+The model did not receive the blind-world label, expected action, hidden inventory truth, or test secret.
 
-## v0.5.5
-Structured Outputs provider, stronger investigation rules, and resumable irreversible A→B→A runs.
+**Same failure signal. Different reality. Different safe action.**
 
+---
 
-## v0.5.7
-Final live gate orders use `IMMEDIATE_PAYMENT_REQUIRED` so successful captures must be terminal rather than `PENDING`.
+## Try the public demo
 
+Open:
 
-## v0.5.8
-Decisive observed evidence removes `ABSTAIN` from legal actions; Gate PASS now uses the actual PayPal→inventory counterfactual probe path rather than a synthetic hypothesis-rejection requirement.
+https://reversa-orpin.vercel.app/
 
+The hosted console runs in **Verified Proof Mode**. It does not need PayPal or OpenAI credentials.
 
-## v0.5.9
-Protocol-level prevention of premature abstention: if a decisive probe remains available, ABSTAIN is rejected and repaired.
+1. Click **REPLAY RECOVERY**.
+2. Watch the recovery trace:
+   - Check PayPal
+   - Check inventory
+   - Choose safe action
+   - Safety gate
+   - Real PayPal effect
+   - Independent verifier
+3. Click **SHOW COUNTERFACTUAL** to compare A1 → B → A2.
+4. Click **VIEW PROOF** for:
+   - real PayPal Sandbox IDs;
+   - independent verifier invariants;
+   - zero unsafe executions;
+   - zero duplicate financial effects;
+   - no hidden-world leak;
+   - SHA-256 proof-lock integrity.
 
-## Grand Prize Build — Verified Proof API
+The public UI is read-only. It replays cryptographically locked evidence from the successful live Gate rather than exposing financial credentials in the browser.
 
-The judge-facing product surface can run without PayPal or OpenAI credentials. It reads only the locked final Gate 0.5 evidence.
+---
 
-Freeze the final proof once:
+## How REVERSA works
+
+```text
+                 CHECKOUT LOSES CERTAINTY
+                          │
+                          ▼
+                ┌───────────────────┐
+                │      REVERSA      │
+                └─────────┬─────────┘
+                          │
+                  1. inspect reality
+                          │
+             ┌────────────┴────────────┐
+             ▼                         ▼
+       PayPal payment             Business state
+       authorization              inventory/order/
+       capture/refund             fulfillment
+             │                         │
+             └────────────┬────────────┘
+                          ▼
+                   AI RECONSTRUCTS
+                          │
+                          ▼
+                DETERMINISTIC POLICY
+                          │
+                allow / block action
+                          │
+                          ▼
+                     PAYPAL EFFECT
+                          │
+                          ▼
+                INDEPENDENT RE-READ
+                          │
+                          ▼
+                    VERIFIED OUTCOME
+```
+
+### Separation of responsibilities
+
+**AI reasons.**  
+The model decides which observation is needed next and reconstructs the transaction state from external evidence.
+
+**Deterministic policy authorizes.**  
+The model cannot directly execute unrestricted financial calls. State-legality rules constrain the available recovery transition.
+
+**PayPal executes.**  
+Money-moving effects use the PayPal Sandbox Payments/Orders APIs.
+
+**Independent evidence verifies.**  
+After mutation, REVERSA re-reads PayPal rather than trusting the agent's own claim that the action succeeded.
+
+---
+
+## Why this is different from idempotency
+
+PayPal already supports request-level idempotency through `PayPal-Request-Id`.
+
+REVERSA solves a different problem:
+
+> **Which action is correct now?**
+
+When payment state and merchant state diverge, the safe recovery may be:
+
+- `CAPTURE`
+- `VOID`
+- `RESTORE_ORDER`
+- `REFUND`
+- `DO_NOTHING`
+- `ABSTAIN`
+
+Idempotency can make a repeated API request safer. It cannot, by itself, decide whether the correct recovery is to capture an authorization, void it, restore a missing order, refund a completed payment, or do nothing.
+
+---
+
+## Safety architecture
+
+REVERSA uses four boundaries:
+
+1. **Blind-world isolation**  
+   Hidden scenario metadata and expected actions never enter the model-visible state.
+
+2. **Probe dependency graph**  
+   The reasoner must establish payment truth before asking the business-state question required by that payment state.
+
+3. **Deterministic safety gate**  
+   A financial proposal is executed only if the observed state permits it.
+
+4. **Independent verification**  
+   PayPal is read again after the effect to validate the actual financial world.
+
+The final live A→B→A run produced:
+
+```text
+unsafe executions             0
+duplicate financial effects   0
+hidden-world leak             none
+```
+
+---
+
+## Evidence integrity
+
+After the successful live Gate, the five source evidence files were frozen with SHA-256 hashes.
+
+The Recovery Console's **Proof Drawer** recalculates and displays the integrity state.
+
+The Vercel deployment contains a read-only snapshot exported from that locked evidence. Its build fails if the hosted snapshot no longer matches its manifest.
+
+---
+
+## Tech stack
+
+### Recovery engine
+- Python 3.11+
+- OpenAI Responses API with Structured Outputs
+- Pydantic
+- PayPal Orders v2 / Payments v2
+- httpx
+- pytest
+
+### Product surface
+- FastAPI read-only proof API for local/reproducible mode
+- Next.js
+- React
+- TypeScript
+- Vercel
+
+### Evidence
+- SHA-256 proof lock
+- independent PayPal re-reads
+- resumable irreversible A→B→A harness
+
+---
+
+## Repository map
+
+```text
+app/
+  agent/                 adaptive reasoning + deterministic protocol
+  tools/                 PayPal integration
+  live_aba.py            live blind A→B→A gate
+
+api/
+  evidence_adapter.py    locked proof → product model
+  server.py              read-only FastAPI proof API
+
+evidence/
+  live_aba_FINAL/        final locked live evidence
+  live_aba_manifest_FINAL.json
+
+web/
+  app/                   Next.js hosted application
+  components/            Recovery Console + Proof Drawer
+  data/locked-proof/     deployable verified snapshot
+  scripts/               proof export + SHA-256 verification
+
+tests/
+  protocol, safety, proof, product and hosted-demo tests
+```
+
+---
+
+## Run locally
+
+### Python
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\FREEZE_GATE0_5.ps1
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -e ".[dev,openai]"
 ```
 
-Start the read-only API:
-
-```powershell
-$env:REVERSA_EVIDENCE_DIR="evidence/live_aba_FINAL"
-python -m uvicorn api.server:app --reload --port 8000
-```
-
-Endpoints:
-
-- `GET /api/health`
-- `GET /api/proof/final`
-- `GET /api/proof/A1`
-- `GET /api/proof/B`
-- `GET /api/proof/A2`
-
-The API never writes to the proof directory.
-
-Verify later that the locked evidence is unchanged:
+### Verify locked evidence
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\VERIFY_GATE0_5_LOCK.ps1
 ```
 
-Or launch the product API directly:
+Expected:
+
+```text
+PROOF LOCK: PASS
+Verified 5 locked files.
+```
+
+### Start local proof API
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\RUN_PRODUCT_API.ps1
 ```
 
-
-## Grand Prize Build — Recovery Console
-
-Start the Proof API in one terminal:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\RUN_PRODUCT_API.ps1
-```
-
-Start the judge-facing web console in another terminal:
+### Start frontend
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\RUN_PRODUCT_WEB.ps1
 ```
 
-Open `http://127.0.0.1:3000` and click **RECOVER SAFELY**. The frontend only reads the locked `FINAL` proof through `/api/proof/final`; it cannot execute financial actions.
+Open `http://127.0.0.1:3000`.
+
+---
+
+## Reproduce the live PayPal Sandbox gate
+
+The hosted demo does **not** execute new financial actions.
+
+To reproduce the underlying experiment, configure locally:
+
+```text
+PAYPAL_CLIENT_ID
+PAYPAL_CLIENT_SECRET
+PAYPAL_BASE_URL=https://api-m.sandbox.paypal.com
+OPENAI_API_KEY
+REVERSA_MODEL
+```
+
+Then follow `GATE_0_5_RUNBOOK.md`.
+
+Final target:
+
+```text
+A1 → CAPTURE → COMPLETED
+B  → VOID    → VOIDED
+A2 → CAPTURE → COMPLETED
+```
+
+---
+
+## What is proven — and what is not
+
+### Proven
+- adaptive counterfactual action selection;
+- real PayPal Sandbox financial effects;
+- independent outcome verification;
+- zero unsafe executions in the final run;
+- zero duplicate financial effects;
+- no hidden-world leak;
+- cryptographically locked final evidence.
+
+### Current limitations
+- PayPal is Sandbox, not production money.
+- Hidden merchant inventory is controlled by the blind test harness.
+- The public Vercel experience is a verified replay, not a live financial endpoint.
+- Production use would require authenticated merchant inventory/order/fulfillment connectors.
+
+---
+
+## North star
+
+> **One intended purchase. One correct financial outcome. Even when the transaction breaks halfway.**
+
+Agentic commerce needs more than payment initiation.
+
+**It needs recovery.**
+
+---
+
+## License
+
+MIT
