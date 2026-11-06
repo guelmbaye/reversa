@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "reversa-gate0"
+version = "0.7.0"
+description = "REVERSA Gate 0.5 Live Blind Counterfactual A→B→A"
+requires-python = ">=3.11"
+dependencies = ["httpx>=0.27", "fastapi>=0.115", "uvicorn[standard]>=0.30", "pydantic>=2.0"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+openai = ["openai>=2.0"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app", "app.*", "api", "api.*"]
+exclude = ["evidence", "evidence.*", "tests", "tests.*"]
+namespaces = false
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

@@ -1,0 +1,36 @@
+{
+  "version": "0.5",
+  "gate": "LIVE_BLIND_COUNTERFACTUAL_ABA",
+  "amount": "249.00",
+  "currency": "USD",
+  "run_secret": "0fb936a89e3058636a1febd80b83b3fd",
+  "runs": {
+    "A1": {
+      "order_id": "4HJ384618F3624208",
+      "approve_url": "https://www.sandbox.paypal.com/checkoutnow?token=4HJ384618F3624208",
+      "armed": true,
+      "hidden_inventory_available": true,
+      "expected_action": "CAPTURE",
+      "run_secret": "0fb936a89e3058636a1febd80b83b3fd-A1",
+      "authorization_id": "2VU84292Y88800505"
+    },
+    "B": {
+      "order_id": "057741920V009064R",
+      "approve_url": "https://www.sandbox.paypal.com/checkoutnow?token=057741920V009064R",
+      "armed": true,
+      "hidden_inventory_available": false,
+      "expected_action": "VOID",
+      "run_secret": "0fb936a89e3058636a1febd80b83b3fd-B",
+      "authorization_id": "434509746C9938136"
+    },
+    "A2": {
+      "order_id": "5HA45919A8573152L",
+      "approve_url": "https://www.sandbox.paypal.com/checkoutnow?token=5HA45919A8573152L",
+      "armed": true,
+      "hidden_inventory_available": true,
+      "expected_action": "CAPTURE",
+      "run_secret": "0fb936a89e3058636a1febd80b83b3fd-A2",
+      "authorization_id": "5PC59976YS1896627"
+    }
+  }
+}

@@ -1,0 +1,73 @@
+# ------------------------------
+# REVERSA repository hygiene
+# ------------------------------
+
+# Python
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*.pyd
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# Local Python/tool caches
+.mypy_cache/
+.ruff_cache/
+.cache/
+
+# Node / Next.js
+web/node_modules/
+web/.next/
+web/out/
+web/.vercel/
+node_modules/
+.next/
+out/
+.vercel/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Secrets and local environment
+.env
+.env.*
+!.env.example
+!web/.env.local.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs / temp
+*.log
+*.tmp
+*.temp
+tmp/
+temp/
+
+# Local experimental outputs.
+# Keep ONLY the final locked Gate 0.5 evidence public/reproducible.
+evidence/*
+!evidence/live_aba_FINAL/
+!evidence/live_aba_FINAL/**
+!evidence/live_aba_manifest_FINAL.json
+
+# Optional local run directories
+runs/
+results/
+artifacts/

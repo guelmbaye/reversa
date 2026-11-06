@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "generated": true,
+  "exported_at_utc": "2026-11-06T11:13:52.674Z",
+  "source": "http://127.0.0.1:8000/api/proof/final",
+  "snapshot_sha256": "aa984fe612d7ef4d3cb94d782e8e8b6e7ac6385cf22a5afe57f981c9f8c0de61",
+  "gate_result": "PASS",
+  "actions": [
+    "CAPTURE",
+    "VOID",
+    "CAPTURE"
+  ],
+  "source_lock_locked_at_utc": "2026-11-06T09:29:49.947909+00:00",
+  "source_lock_file_count": 5
+}
